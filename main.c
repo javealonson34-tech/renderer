@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <math.h>
+#include <stdlib.h>
 
 #define WIDTH  800
 #define HEIGHT 600
@@ -18,9 +19,8 @@ typedef struct {
     Color color;
 } BezierCurve;
 
-// حساب نقطة على منحنى Bézier
 Point bezier(float t, BezierCurve c) {
-    float u = 1 - t;
+    float u = 1.0f - t;
 
     Point p;
     p.x = u*u*u*c.p0.x + 3*u*u*t*c.p1.x + 3*u*t*t*c.p2.x + t*t*t*c.p3.x;
@@ -29,15 +29,22 @@ Point bezier(float t, BezierCurve c) {
     return p;
 }
 
-// رسم بسيط
+int clamp(int v) {
+    if (v < 0) return 0;
+    if (v > 255) return 255;
+    return v;
+}
+
 int main() {
     FILE *f = fopen("render.ppm", "w");
+    if (!f) {
+        printf("Failed to open file\n");
+        return 1;
+    }
 
     Color bg = {0.05f, 0.05f, 0.1f};
 
     BezierCurve curve;
-
-    // نقاط مختلفة عن المثال الجاهز
     curve.p0 = (Point){100, 500};
     curve.p1 = (Point){200, 100};
     curve.p2 = (Point){600, 100};
@@ -53,7 +60,7 @@ int main() {
             float fx = (float)x;
             float fy = (float)y;
 
-            float minDist = 1e9;
+            float minDist = 1e9f;
 
             for (int i = 0; i <= SEGMENTS; i++) {
                 float t = (float)i / SEGMENTS;
@@ -62,21 +69,21 @@ int main() {
                 float dx = fx - p.x;
                 float dy = fy - p.y;
 
-                float d = sqrt(dx*dx + dy*dy);
+                float d = sqrtf(dx*dx + dy*dy);
 
                 if (d < minDist)
                     minDist = d;
             }
 
-            float intensity = exp(-(minDist * minDist) / 200.0f);
+            float intensity = expf(-(minDist * minDist) / 200.0f);
 
             float r = bg.r * (1 - intensity) + curve.color.r * intensity;
             float g = bg.g * (1 - intensity) + curve.color.g * intensity;
             float b = bg.b * (1 - intensity) + curve.color.b * intensity;
 
-            int ir = (int)(r * 255);
-            int ig = (int)(g * 255);
-            int ib = (int)(b * 255);
+            int ir = clamp((int)(r * 255));
+            int ig = clamp((int)(g * 255));
+            int ib = clamp((int)(b * 255));
 
             fprintf(f, "%d %d %d ", ir, ig, ib);
         }
@@ -84,6 +91,5 @@ int main() {
     }
 
     fclose(f);
-
     return 0;
 }
