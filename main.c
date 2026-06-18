@@ -1,95 +1,134 @@
 #include <stdio.h>
-#include <math.h>
 #include <stdlib.h>
+#include <math.h>
 
-#define WIDTH  800
+#define WIDTH 800
 #define HEIGHT 600
-#define SEGMENTS 100
 
-typedef struct {
-    float x, y;
-} Point;
+unsigned char image[HEIGHT][WIDTH][3];
 
-typedef struct {
-    float r, g, b;
-} Color;
-
-typedef struct {
-    Point p0, p1, p2, p3;
-    Color color;
-} BezierCurve;
-
-Point bezier(float t, BezierCurve c) {
-    float u = 1.0f - t;
-
-    Point p;
-    p.x = u*u*u*c.p0.x + 3*u*u*t*c.p1.x + 3*u*t*t*c.p2.x + t*t*t*c.p3.x;
-    p.y = u*u*u*c.p0.y + 3*u*u*t*c.p1.y + 3*u*t*t*c.p2.y + t*t*t*c.p3.y;
-
-    return p;
+void setPixel(int x, int y, int r, int g, int b)
+{
+    if (x >= 0 && x < WIDTH && y >= 0 && y < HEIGHT)
+    {
+        image[y][x][0] = r;
+        image[y][x][1] = g;
+        image[y][x][2] = b;
+    }
 }
 
-int clamp(int v) {
-    if (v < 0) return 0;
-    if (v > 255) return 255;
-    return v;
+void drawCircle(int cx, int cy, int radius, int r, int g, int b)
+{
+    for (int y = -radius; y <= radius; y++)
+    {
+        for (int x = -radius; x <= radius; x++)
+        {
+            if (x * x + y * y <= radius * radius)
+            {
+                setPixel(cx + x, cy + y, r, g, b);
+            }
+        }
+    }
 }
 
-int main() {
-    FILE *f = fopen("render.ppm", "w");
-    if (!f) {
-        printf("Failed to open file\n");
+void drawLine(int x0, int y0, int x1, int y1, int r, int g, int b)
+{
+    int dx = abs(x1 - x0);
+    int dy = abs(y1 - y0);
+
+    int sx = x0 < x1 ? 1 : -1;
+    int sy = y0 < y1 ? 1 : -1;
+
+    int err = dx - dy;
+
+    while (1)
+    {
+        setPixel(x0, y0, r, g, b);
+
+        if (x0 == x1 && y0 == y1)
+            break;
+
+        int e2 = 2 * err;
+
+        if (e2 > -dy)
+        {
+            err -= dy;
+            x0 += sx;
+        }
+
+        if (e2 < dx)
+        {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
+int main()
+{
+    for (int y = 0; y < HEIGHT; y++)
+    {
+        for (int x = 0; x < WIDTH; x++)
+        {
+            image[y][x][0] = 10;
+            image[y][x][1] = 10;
+            image[y][x][2] = 30;
+        }
+    }
+
+    int x0 = 200, y0 = 100;
+    int x1 = 600, y1 = 220;
+    int x2 = 300, y2 = 500;
+    int x3 = 700, y3 = 580;
+
+    drawLine(x0, y0, x1, y1, 100, 100, 100);
+    drawLine(x2, y2, x3, y3, 100, 100, 100);
+
+    for (double t = 0; t <= 1.0; t += 0.001)
+    {
+        double u = 1.0 - t;
+
+        double x =
+            u * u * u * x0 +
+            3 * u * u * t * x1 +
+            3 * u * t * t * x2 +
+            t * t * t * x3;
+
+        double y =
+            u * u * u * y0 +
+            3 * u * u * t * y1 +
+            3 * u * t * t * y2 +
+            t * t * t * y3;
+
+        drawCircle((int)x, (int)y, 2, 255, 80, 20);
+    }
+
+    drawCircle(x0, y0, 6, 255, 255, 255);
+    drawCircle(x3, y3, 6, 255, 255, 255);
+
+    drawCircle(x1, y1, 6, 255, 220, 0);
+    drawCircle(x2, y2, 6, 255, 220, 0);
+
+    FILE *f = fopen("render.ppm", "wb");
+    if (f == NULL) {
         return 1;
     }
 
-    Color bg = {0.05f, 0.05f, 0.1f};
-
-    BezierCurve curve;
-    curve.p0 = (Point){100, 500};
-    curve.p1 = (Point){200, 100};
-    curve.p2 = (Point){600, 100};
-    curve.p3 = (Point){700, 500};
-
-    curve.color = (Color){0.2f, 1.0f, 0.4f};
-
     fprintf(f, "P3\n%d %d\n255\n", WIDTH, HEIGHT);
 
-    for (int y = 0; y < HEIGHT; y++) {
-        for (int x = 0; x < WIDTH; x++) {
-
-            float fx = (float)x;
-            float fy = (float)y;
-
-            float minDist = 1e9f;
-
-            for (int i = 0; i <= SEGMENTS; i++) {
-                float t = (float)i / SEGMENTS;
-                Point p = bezier(t, curve);
-
-                float dx = fx - p.x;
-                float dy = fy - p.y;
-
-                float d = sqrtf(dx*dx + dy*dy);
-
-                if (d < minDist)
-                    minDist = d;
-            }
-
-            float intensity = expf(-(minDist * minDist) / 200.0f);
-
-            float r = bg.r * (1 - intensity) + curve.color.r * intensity;
-            float g = bg.g * (1 - intensity) + curve.color.g * intensity;
-            float b = bg.b * (1 - intensity) + curve.color.b * intensity;
-
-            int ir = clamp((int)(r * 255));
-            int ig = clamp((int)(g * 255));
-            int ib = clamp((int)(b * 255));
-
-            fprintf(f, "%d %d %d ", ir, ig, ib);
+    for (int y = 0; y < HEIGHT; y++)
+    {
+        for (int x = 0; x < WIDTH; x++)
+        {
+            fprintf(f, "%d %d %d ",
+                    image[y][x][0],
+                    image[y][x][1],
+                    image[y][x][2]);
         }
         fprintf(f, "\n");
     }
 
     fclose(f);
+
     return 0;
 }
